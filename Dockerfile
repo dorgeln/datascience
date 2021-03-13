@@ -99,3 +99,4 @@ RUN jupyter serverextension enable nbgitpuller --sys-prefix
 
 RUN chown -R $USER.$USER ${HOME}
 USER ${USER}
+WORKDIR ${HOME}
