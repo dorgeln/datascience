@@ -23,8 +23,8 @@ deps:
 	poetry add --lock ${PYTHON_FULL} -v
 
 pull:
-	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG} | true
-	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest | true
+	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG} || true
+	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest || true
 
 build:
 	docker image build --cache-from ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG}  --cache-from ${DOCKER_USER}/${DOCKER_REPO}:latest -t ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG} .

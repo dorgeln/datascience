@@ -95,4 +95,7 @@ ENTRYPOINT ["/usr/local/bin/entrypoint"]
 CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
 EXPOSE 8888
 
+RUN jupyter serverextension enable nbgitpuller --sys-prefix
+
 RUN chown -R $USER.$USER ${HOME}
+USER ${USER}
