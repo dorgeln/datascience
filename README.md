@@ -1,2 +1,2 @@
-# datascience
-Dorgeln datascience docker image
+# docker-datascience
+Docker Datascience Arch Linux image.
