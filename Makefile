@@ -31,7 +31,8 @@ bash:
 
 push: pull
 	docker image build --cache-from ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG}  --cache-from ${DOCKER_USER}/${DOCKER_REPO}:latest -t ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:latest .
-	docker image push --all-tags ${DOCKER_USER}/${DOCKER_REPO}
+	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${DOCKER_TAG}
+	docker image push ${DOCKER_USER}/${DOCKER_REPO}:latest
 
 install:
 	npm install --unsafe-perm
