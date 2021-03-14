@@ -48,13 +48,14 @@ COPY poetry-core.lock poetry.lock
 RUN poetry install -vvv  && jupyter lab clean -y 
 
 # Install npm and nmp core dependencies
-RUN curl -qL https://www.npmjs.com/install.sh | sh
+
 ENV NPM_DIR=${APP_BASE}/npm
 ENV NODE_PATH=${NPM_DIR}/node_modules
 ENV NPM_CONFIG_GLOBALCONFIG ${NPM_DIR}/npmrc
 RUN mkdir -p ${NPM_DIR}/bin
-ENV PATH=" ${NPM_DIR}/bin:$PATH" 
+ENV PATH="$PATH:${NPM_DIR}/bin" 
 WORKDIR ${NPM_DIR}
+RUN curl -qL https://www.npmjs.com/install.sh | sh
 COPY package-core.json  ${NPM_DIR}/package.json
 COPY package-lock-core.json  ${NPM_DIR}/package-lock.json
 RUN npm install -dd --prefix ${NPM_DIR} && npm config set update-notifier false && npm cache clean --force

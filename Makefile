@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
-DOCKER_TAG := 0.0.1
+DOCKER_TAG := 0.0.3
 
 ARCH_CORE := base-devel git git-lfs pyenv nodejs freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg fontconfig ttf-liberation neofetch 
 PYTHON_CORE := numpy matplotlib pandas jupyterlab  altair altair_saver nbgitpuller ipywidgets beautifulsoup4 bokeh bottleneck cloudpickle cython dask dill h5py ipympl numexpr patsy protobuf scikit-image scikit-learn scipy seaborn sqlalchemy statsmodels sympy vincent widgetsnbextension xlrd  invoke jupyter-server-proxy  jupyter-panel-proxy awesome-panel-extensions
