@@ -1,5 +1,4 @@
-ARG ARCH_VERSION=base-devel-20210307.0.16708
-
+ARG ARCH_VERSION
 FROM archlinux:${ARCH_VERSION} as base-devel
 
 # Glibc fix to build image on Docker Hub
@@ -15,18 +14,18 @@ RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g
 RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
 
 # Install Python via Pyenv
-ARG PYTHON_VERSION=3.8.7
-ENV APP_BASE /env
 
+ENV APP_BASE /env
 ENV PYENV_ROOT=${APP_BASE}/pyenv
 RUN mkdir -p ${PYENV_ROOT}
 WORKDIR ${PYENV_ROOT}
 
+ARG PYTHON_VERSION
+ENV PATH=${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin:$PATH
 RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
-ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin:$PATH" 
 
 # Install Poetry
-ARG POETRY_VERSION=1.1.5
+ARG POETRY_VERSION
 ENV PYTHONUNBUFFERED=true \
     PYTHONDONTWRITEBYTECODE=true \
     PIP_NO_CACHE_DIR=true \
@@ -35,10 +34,9 @@ ENV PYTHONUNBUFFERED=true \
     POETRY_VIRTUALENVS_CREATE=false \
     POETRY_NO_INTERACTION=true \
     POETRY_HOME=${APP_BASE}/poetry
-
-RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
 ENV PATH="${POETRY_HOME}/bin:$PATH" 
 
+RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
 
 # Install Python Core dependencies 
 RUN mkdir /${APP_BASE}/code
@@ -74,13 +72,14 @@ ENV LANG en_US.UTF-8
 ENV LANGUAGE en_US.UTF-8
 ENV SHELL /bin/bash
 
-ARG NB_USER=jovian 
-ARG NB_UID=1000
-ARG NB_GROUPS="adm,kvm,wheel,network,uucp,users"
+ENV NB_USER=jovian 
+ENV NB_UID=1000
+ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
 RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
 
 ENV USER ${NB_USER}
 ENV HOME /home/${USER}
+
 ARG REPO_DIR=${HOME}
 WORKDIR ${REPO_DIR}
 
