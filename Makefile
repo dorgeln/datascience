@@ -2,17 +2,17 @@
 SHELL := /bin/bash
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
-ARCH_VERSION := base-devel
-PYTHON_VERSION := 3.8.7
+ARCH_VERSION := base-devel-20210328.0.18194
+PYTHON_VERSION := 3.8.8
 POETRY_VERSION := 1.1.5
-VERSION_TAG := 0.0.5
+VERSION_TAG := 0.0.6
 ARCH_TAG := arch-${ARCH_VERSION}
 PYTHON_TAG := python-${PYTHON_VERSION}
 POETRY_TAG := poetry-${POETRY_VERSION}
 
 ARCH_CORE := base-devel git git-lfs pyenv nodejs freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg fontconfig ttf-liberation neofetch 
 PYTHON_CORE := numpy matplotlib pandas jupyterlab  altair altair_saver nbgitpuller ipywidgets beautifulsoup4 bokeh bottleneck cloudpickle cython dask dill h5py ipympl numexpr patsy protobuf scikit-image scikit-learn scipy seaborn sqlalchemy statsmodels sympy vincent widgetsnbextension xlrd  invoke jupyter-server-proxy  jupyter-panel-proxy awesome-panel-extensions
-PYTHON_FULL := cysgp4 ansible==2.9.18
+PYTHON_FULL := cysgp4 ansible==2.9.18 jupylet
 NPM_CORE := vega-lite vega-cli canvas
 
 deps:
@@ -32,10 +32,10 @@ pull:
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest || true
 
 build:
-	docker image build --cache-from ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}  --cache-from ${DOCKER_USER}/${DOCKER_REPO}:latest --build-arg ARCH_VERSION=${ARCH_VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg POETRY_VERSION=${POETRY_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG} .
+	docker image build --build-arg ARCH_VERSION=${ARCH_VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg POETRY_VERSION=${POETRY_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG} .
 
 build-nocache:
-	docker image build --cache-from ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}  --cache-from ${DOCKER_USER}/${DOCKER_REPO}:latest --build-arg ARCH_VERSION=${ARCH_VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg POETRY_VERSION=${POETRY_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG} ..
+	docker image build --no-cache --build-arg ARCH_VERSION=${ARCH_VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg POETRY_VERSION=${POETRY_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG} .
 
 bash:
 	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} bash
@@ -45,7 +45,7 @@ run:
 	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
 
 
-push: pull build
+push: build
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG}
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG}
