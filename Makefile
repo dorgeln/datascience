@@ -1,31 +1,53 @@
 .ONESHELL:
 SHELL := /bin/bash
+VERSION_TAG := 0.0.7
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
-ARCH_VERSION := base-devel-20210328.0.18194
+ARCH_VERSION := base-devel-20210404.0.18927
 PYTHON_VERSION := 3.8.8
+PYTHON_REQUIRED := ">=3.8,<3.9"
 POETRY_VERSION := 1.1.5
-VERSION_TAG := 0.0.6
 ARCH_TAG := arch-${ARCH_VERSION}
 PYTHON_TAG := python-${PYTHON_VERSION}
 POETRY_TAG := poetry-${POETRY_VERSION}
 
 ARCH_CORE := base-devel git git-lfs pyenv nodejs freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg fontconfig ttf-liberation neofetch 
-PYTHON_CORE := numpy matplotlib pandas jupyterlab  altair altair_saver nbgitpuller ipywidgets beautifulsoup4 bokeh bottleneck cloudpickle cython dask dill h5py ipympl numexpr patsy protobuf scikit-image scikit-learn scipy seaborn sqlalchemy statsmodels sympy vincent widgetsnbextension xlrd  invoke jupyter-server-proxy  jupyter-panel-proxy awesome-panel-extensions
-PYTHON_FULL := cysgp4 ansible==2.9.18 jupylet
-NPM_CORE := vega-lite vega-cli canvas
+ARCH_EXTRA := 
+PYTHON_CORE := numpy matplotlib pandas jupyterlab  altair altair_saver nbgitpuller invoke jupyter-server-proxy cysgp4 
+PYTHON_FULL := ansible==2.9.19 
+NPM_CORE := vega-lite vega-cli canvas configurable-http-proxy 
 
-deps:
-	[ -f  pkglist.txt ] rm pkglist.txt
-	for pkg in ${ARCH_CORE}; do \
-		echo $$pkg >> pkglist.txt; \
-	done
-	npm install --package-lock-only ${NPM_CORE}
-	[ -f ./package-core.json ] || cp package.json package-core.json;cp package-lock.json package-lock-core.json
-	[ -f ./pyproject.toml ] || poetry init -n
+
+pyenv:
+	pyenv install -s ${PYTHON_VERSION}
+	pyenv local ${PYTHON_VERSION}
+	pyenv global ${PYTHON_VERSION}
+	python --version
+	python -m pip install --upgrade pip
+	pip install poetry==${POETRY_VERSION}
+	pip install jupyter-repo2docker
+	poetry run python -m pip install --upgrade pip
+
+npm:
+	curl -qL https://www.npmjs.com/install.sh | sudo sh
+
+deps: 
+	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION_TAG}"/g' pyproject.toml
+
 	poetry add --lock ${PYTHON_CORE} -v
 	[ -f ./pyproject-core.toml ] || cp pyproject.toml pyproject-core.toml;cp poetry.lock poetry-core.lock
 	poetry add --lock ${PYTHON_FULL} -v
+
+	[ -f  pkglist-core.txt ] || 
+	for pkg in ${ARCH_CORE}; do \
+		echo $$pkg >> pkglist-core.txt; \
+	done
+	[ -f ./package-core.json ] || npm install --package-lock-only ${NPM_CORE};cp package.json package-core.json;cp package-lock.json package-lock-core.json
+
+	for pkg in ${ARCH_EXTRA}; do \
+		echo $$pkg >> pkglist-extra.txt; \
+	done
+
 
 pull:
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} || true
@@ -44,6 +66,19 @@ bash:
 run:
 	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
 
+tag:
+	-while IFS=$$'=' read -r pkg version; do \
+		version=$${version//^}; \
+		version=$${version//'"'}; \
+		version=$${version//' '}; \
+		pkg=$${pkg//' '}; \
+		case $$version in \
+			'') pkg='';version=''  ;;\
+			*[a-zA-Z=]*) pkg='';version='' ;; \
+    		*) ;; \
+		esac; \
+		[ ! $$pkg  = '' ] && docker tag ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} ${DOCKER_USER}/${DOCKER_REPO}:$$pkg-$$version ; \
+	done < pyproject.toml
 
 push: build
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
@@ -52,9 +87,16 @@ push: build
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG}
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:latest
 
-install:
+push-all: build tag
+	docker image push -a ${DOCKER_USER}/${DOCKER_REPO}
+
+
+devel: 
 	npm install --unsafe-perm
 	poetry install -vvv
 
 clean:
-	rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist.txt
+	-poetry env remove python
+	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-full.txt
+
+

@@ -1,0 +1,15 @@
+base-devel
+git
+git-lfs
+pyenv
+nodejs
+freetype2
+pango
+cairo
+giflib
+libjpeg-turbo
+openjpeg2
+librsvg
+fontconfig
+ttf-liberation
+neofetch

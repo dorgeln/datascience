@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "canvas": "^2.7.0",
-    "vega-cli": "^5.19.1",
+    "configurable-http-proxy": "^4.3.2",
+    "vega-cli": "^5.20.2",
     "vega-lite": "^5.0.0"
   }
 }
