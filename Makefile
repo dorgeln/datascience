@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := /bin/bash
-VERSION_TAG := 0.0.7
+VERSION_TAG := 0.0.8
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
 ARCH_VERSION := base-devel-20210404.0.18927
@@ -16,7 +16,14 @@ ARCH_EXTRA :=
 PYTHON_CORE := numpy matplotlib pandas jupyterlab  altair altair_saver nbgitpuller invoke jupyter-server-proxy cysgp4 
 PYTHON_FULL := ansible==2.9.19 
 NPM_CORE := vega-lite vega-cli canvas configurable-http-proxy 
+LOCAL_DIR := $(shell pwd | grep -o "[^/]*\$$" )
 
+export NPM_DIR=${PWD}/.npm
+export NODE_PATH=${NPM_DIR}/node_modules
+export NPM_CONFIG_GLOBALCONFIG := ${NPM_DIR}/npmrc
+
+env:
+	env
 
 pyenv:
 	pyenv install -s ${PYTHON_VERSION}
@@ -26,12 +33,14 @@ pyenv:
 	python -m pip install --upgrade pip
 	pip install poetry==${POETRY_VERSION}
 	pip install jupyter-repo2docker
-	poetry run python -m pip install --upgrade pip
 
 npm:
 	curl -qL https://www.npmjs.com/install.sh | sudo sh
 
 deps: 
+	poetry config virtualenvs.path .env
+	poetry config cache-dir .cache
+	poetry config virtualenvs.in-project true
 	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION_TAG}"/g' pyproject.toml
 
 	poetry add --lock ${PYTHON_CORE} -v
@@ -53,7 +62,7 @@ pull:
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} || true
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest || true
 
-build:
+build: 
 	docker image build --build-arg ARCH_VERSION=${ARCH_VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg POETRY_VERSION=${POETRY_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG} .
 
 build-nocache:
@@ -62,9 +71,12 @@ build-nocache:
 bash:
 	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} bash
 
-
 run:
 	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
+
+
+lab:
+	poetry run jupyter-lab
 
 tag:
 	-while IFS=$$'=' read -r pkg version; do \
@@ -82,21 +94,23 @@ tag:
 
 push: build
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
-	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${ARCH_TAG}
-	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG}
-	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${POETRY_TAG}
 	docker image push ${DOCKER_USER}/${DOCKER_REPO}:latest
 
 push-all: build tag
 	docker image push -a ${DOCKER_USER}/${DOCKER_REPO}
 
 
-devel: 
+install: 
 	npm install --unsafe-perm
 	poetry install -vvv
 
 clean:
 	-poetry env remove python
 	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-full.txt
+
+
+clean-cache:
+	poetry cache clear -n --all pypi
+	npm cache clean --force
 
 
