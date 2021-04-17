@@ -1,6 +1,4 @@
 base-devel
-<<<<<<< HEAD
-=======
 freetype2
 pango
 cairo
@@ -8,4 +6,3 @@ giflib
 libjpeg-turbo
 openjpeg2
 librsvg
->>>>>>> 0.0.11

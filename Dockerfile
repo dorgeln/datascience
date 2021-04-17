@@ -1,12 +1,7 @@
-<<<<<<< HEAD
-ARG ARCH_VERSION
-FROM archlinux:base-${ARCH_VERSION} as core
-=======
 ARG PYTHON_VERSION
 
 FROM dorgeln/archlinux:latest as base
 ARG PYTHON_VERSION
->>>>>>> 0.0.11
 
 # Glibc fix if you want build images on Docker Hub
 # RUN patched_glibc=glibc-linux4-2.33-4-x86_64.pkg.tar.zst && \
@@ -15,19 +10,7 @@ ARG PYTHON_VERSION
 
 # Update Packages, install package dependencies and clean pacman cache
 COPY pkglist-core.txt pkglist-core.txt
-<<<<<<< HEAD
-
 RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-core.txt && pacman -Scc --noconfirm 
-RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
-RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
-
-FROM core as devel
-
-COPY pkglist-devel.txt pkglist-devel.txt
-RUN pacman --noconfirm  -S - < pkglist-devel.txt && pacman -Scc --noconfirm 
-=======
-RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-core.txt && pacman -Scc --noconfirm 
->>>>>>> 0.0.11
 
 #  Allow sudo and su without password for user in group wheel
 RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
@@ -79,17 +62,8 @@ RUN poetry install -vvv
 RUN poetry cache clear python --all
 RUN rm -rf /env/poetry/lib/poetry/_vendor/py2.7 /env/poetry/lib/poetry/_vendor/py3.5  /env/poetry/lib/poetry/_vendor/py3.6  /env/poetry/lib/poetry/_vendor/py3.7  /env/poetry/lib/poetry/_vendor/py3.9
 
-<<<<<<< HEAD
-# Install npm and nmp core dependencies
-ENV NPM_DIR=${APP_BASE}/npm
-ENV NODE_PATH=${NPM_DIR}/node_modules
-ENV NPM_CONFIG_GLOBALCONFIG ${NPM_DIR}/npmrc
-RUN mkdir -p ${NPM_DIR}/bin
-ENV PATH="$PATH:${NPM_DIR}/bin" 
-=======
 FROM python-devel as npm-devel
 
->>>>>>> 0.0.11
 WORKDIR ${NPM_DIR}
 COPY package-core.json  ${NPM_DIR}/package.json
 COPY package-lock-core.json  ${NPM_DIR}/package-lock.json
@@ -97,14 +71,6 @@ RUN npm install -dd --prefix ${NPM_DIR}
 RUN npm config --global set update-notifier false
 RUN npm config --global set prefix ${NPM_DIR}
 RUN npm cache clean --force
-<<<<<<< HEAD
-
-# Install additional Python and  jupyterlab dependencies
-WORKDIR /${APP_BASE}/code
-COPY pyproject-full.toml pyproject.toml
-COPY poetry-full.lock poetry.lock
-RUN poetry install -vvv && jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
-=======
 
 FROM npm-devel as  python-core
 WORKDIR ${POETRY_HOME}
@@ -122,34 +88,6 @@ COPY --from=python-core ${ENV_ROOT} ${ENV_ROOT}
 
 COPY pkglist-extra.txt pkglist-extra.txt
 RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-extra.txt && pacman -Scc --noconfirm 
->>>>>>> 0.0.11
-
-FROM core as deploy
-
-COPY pkglist-extra.txt pkglist-extra.txt
-RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-extra.txt && pacman -Scc --noconfirm 
-
-ENV APP_BASE /env
-ENV PYENV_ROOT=${APP_BASE}/pyenv
-COPY --from=devel /env /env
-
-ARG PYTHON_VERSION
-ENV PATH=${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin:$PATH
-
-ENV PYTHONUNBUFFERED=true \
-    PYTHONDONTWRITEBYTECODE=true \
-    PIP_NO_CACHE_DIR=true \
-    PIP_DISABLE_PIP_VERSION_CHECK=true \
-    PIP_DEFAULT_TIMEOUT=180 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_NO_INTERACTION=true \
-    POETRY_HOME=${APP_BASE}/poetry
-ENV PATH="${POETRY_HOME}/bin:$PATH" 
-
-
-ENV NPM_DIR=${APP_BASE}/npm
-ENV NODE_PATH=${NPM_DIR}/node_modules
-ENV NPM_CONFIG_GLOBALCONFIG ${NPM_DIR}/npmrc
 
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 ENV LC_ALL en_US.UTF-8
@@ -161,7 +99,6 @@ ENV NB_USER=jovian
 ENV NB_UID=1000
 ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
 RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
-RUN jupyter serverextension enable nbgitpuller --sys-prefix
 
 
 ENV USER ${NB_USER}

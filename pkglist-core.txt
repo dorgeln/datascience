@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 which
->>>>>>> 0.0.11
 sudo
 git
 git-lfs
