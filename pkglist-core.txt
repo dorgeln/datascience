@@ -1,8 +1,9 @@
-base-devel
+which
+sudo
 git
 git-lfs
 pyenv
-nodejs
+nodejs-lts-fermium
 freetype2
 pango
 cairo
@@ -12,4 +13,3 @@ openjpeg2
 librsvg
 fontconfig
 ttf-liberation
-neofetch

@@ -2,7 +2,7 @@ ARG ARCH_VERSION
 ARG PYTHON_VERSION
 ARG POETRY_VERSION
 
-FROM archlinux:base-${ARCH_VERSION} as base
+FROM archlinux:base-${ARCH_VERSION} as core
 ARG PYTHON_VERSION
 
 # Glibc fix if you want build images on Docker Hub
@@ -23,7 +23,8 @@ ENV ENV_ROOT="/env"
 
 ENV PYENV_ROOT=${ENV_ROOT}/pyenv \
     POETRY_HOME=${ENV_ROOT}/poetry \
-    NPM_DIR=${ENV_ROOT}/npm 
+    NPM_DIR=${ENV_ROOT}/npm \
+    SRC_DIR=${ENV_ROOT}/src
 
 ENV PYTHONUNBUFFERED=true \
     PYTHONDONTWRITEBYTECODE=true \
@@ -42,7 +43,7 @@ ENV PATH="${POETRY_HOME}/bin:${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON
 RUN curl -qL https://www.npmjs.com/install.sh | sh
 
 # Build devel image 
-FROM base as python-devel
+FROM core as devel
 ARG PYTHON_VERSION
 ARG POETRY_VERSION
 
@@ -53,20 +54,17 @@ RUN pacman --noconfirm  -S - < pkglist-devel.txt && pacman -Scc --noconfirm
 RUN echo ${PYTHON_VERSION} 
 WORKDIR ${PYENV_ROOT}
 RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
-RUN pip install -U setuptools
-RUN pip install -U wheel
 
-# Install Poetry and Python Core dependencies 
-WORKDIR ${POETRY_HOME}
+# Install Poetryand Python Core dependencies 
+WORKDIR ${SRC_DIR}
 RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
 RUN chmod 755 /env/poetry/bin/poetry
 COPY pyproject-core.toml pyproject.toml 
 COPY poetry-core.lock poetry.lock
 RUN poetry install -vvv
-RUN poetry cache clear python --all
-RUN rm -rf /env/poetry/lib/poetry/_vendor/py2.7 /env/poetry/lib/poetry/_vendor/py3.5  /env/poetry/lib/poetry/_vendor/py3.6  /env/poetry/lib/poetry/_vendor/py3.7  /env/poetry/lib/poetry/_vendor/py3.9
+RUN pip install -U setuptools
+RUN pip install -U wheel
 
-FROM python-devel as npm-devel
 
 WORKDIR ${NPM_DIR}
 COPY package-core.json  ${NPM_DIR}/package.json
@@ -76,19 +74,61 @@ RUN npm config --global set update-notifier false
 RUN npm config --global set prefix ${NPM_DIR}
 RUN npm cache clean --force
 
-FROM npm-devel as  python-core
+# Install additional Python and  jupyterlab dependencies
 WORKDIR ${POETRY_HOME}
+COPY pyproject-full.toml pyproject.toml
+COPY poetry-full.lock poetry.lock
+RUN poetry install -vvv 
+
+
+
+
+
+# Build devel image 
+FROM core as devel
+ARG PYTHON_VERSION
+ARG POETRY_VERSION
+
+COPY pkglist-devel.txt pkglist-devel.txt
+RUN pacman --noconfirm  -S - < pkglist-devel.txt && pacman -Scc --noconfirm 
+
+# Install Python via Pyenv
+RUN echo ${PYTHON_VERSION} 
+WORKDIR ${PYENV_ROOT}
+RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
+
+# Install Poetryand Python Core dependencies 
+WORKDIR ${SRC_DIR}
 RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
 RUN chmod 755 /env/poetry/bin/poetry
 COPY pyproject-core.toml pyproject.toml 
 COPY poetry-core.lock poetry.lock
 RUN poetry install -vvv
-RUN jupyter serverextension enable nbgitpuller --sys-prefix
-RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 
-FROM base as deploy
+# Install npm and nmp core dependencies
 
-COPY --from=python-core ${ENV_ROOT} ${ENV_ROOT}
+WORKDIR ${NPM_DIR}
+COPY package-core.json  ${NPM_DIR}/package.json
+COPY package-lock-core.json  ${NPM_DIR}/package-lock.json
+RUN npm install -dd --prefix ${NPM_DIR}
+RUN npm config --global set update-notifier false
+RUN npm config --global set prefix ${NPM_DIR}
+RUN npm cache clean --force
+
+# Install additional Python and  jupyterlab dependencies
+WORKDIR ${POETRY_HOME}
+COPY pyproject-full.toml pyproject.toml
+COPY poetry-full.lock poetry.lock
+RUN poetry install -vvv 
+
+
+
+FROM core as deploy
+
+COPY pkglist-extra.txt pkglist-extra.txt
+RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-extra.txt && pacman -Scc --noconfirm 
+
+COPY --from=devel ${ENV_ROOT} ${ENV_ROOT}
 
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 ENV LC_ALL en_US.UTF-8
@@ -100,7 +140,8 @@ ENV NB_USER=jovian
 ENV NB_UID=1000
 ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
 RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
-
+RUN jupyter serverextension enable nbgitpuller --sys-prefix
+#RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 
 ENV USER ${NB_USER}
 ENV HOME /home/${USER}
