@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "datascience"
-version = "0.0.8"
+version = "0.0.11"
 description = ""
 authors = ["Andreas Trawöger <atrawog@dorgeln.org>"]
 

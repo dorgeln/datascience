@@ -1,0 +1,8 @@
+base-devel
+freetype2
+pango
+cairo
+giflib
+libjpeg-turbo
+openjpeg2
+librsvg
