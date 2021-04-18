@@ -19,7 +19,6 @@ RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam
 ENV ENV_ROOT="/env"
 
 ENV PYENV_ROOT=${ENV_ROOT}/pyenv \
-    POETRY_HOME=${ENV_ROOT}/poetry \
     NPM_DIR=${ENV_ROOT}/npm 
 
 ENV PYTHONUNBUFFERED=true \
@@ -27,19 +26,17 @@ ENV PYTHONUNBUFFERED=true \
     PIP_NO_CACHE_DIR=true \
     PIP_DISABLE_PIP_VERSION_CHECK=true \
     PIP_DEFAULT_TIMEOUT=180 \
-    POETRY_VIRTUALENVS_CREATE=false \
-    POETRY_NO_INTERACTION=true  \
     NODE_PATH=${NPM_DIR}/node_modules \
     NPM_CONFIG_GLOBALCONFIG=${NPM_DIR}/npmrc
 
-RUN mkdir -p ${PYENV_ROOT} ${POETRY_HOME} ${NPM_DIR} ${SRC_DIR}
+RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR} ${SRC_DIR}
 
-ENV PATH="${POETRY_HOME}/bin:${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
+ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
 
 RUN curl -qL https://www.npmjs.com/install.sh | sh
 
 # Build devel image 
-FROM base as python-devel
+FROM base as devel
 ARG PYTHON_VERSION
 
 COPY pkglist-devel.txt pkglist-devel.txt
@@ -52,17 +49,7 @@ RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
 RUN pip install -U setuptools
 RUN pip install -U wheel
 
-# Install Poetry and Python Core dependencies 
-WORKDIR ${POETRY_HOME}
-RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
-RUN chmod 755 /env/poetry/bin/poetry
-COPY pyproject-core.toml pyproject.toml 
-COPY poetry-core.lock poetry.lock
-RUN poetry install -vvv
-RUN poetry cache clear python --all
-RUN rm -rf /env/poetry/lib/poetry/_vendor/py2.7 /env/poetry/lib/poetry/_vendor/py3.5  /env/poetry/lib/poetry/_vendor/py3.6  /env/poetry/lib/poetry/_vendor/py3.7  /env/poetry/lib/poetry/_vendor/py3.9
-
-FROM python-devel as npm-devel
+FROM devel as npm-devel
 
 WORKDIR ${NPM_DIR}
 COPY package-core.json  ${NPM_DIR}/package.json
@@ -72,19 +59,17 @@ RUN npm config --global set update-notifier false
 RUN npm config --global set prefix ${NPM_DIR}
 RUN npm cache clean --force
 
-FROM npm-devel as  python-core
-WORKDIR ${POETRY_HOME}
-RUN curl -sSL https://raw.githubusercontent.com/sdispater/poetry/master/get-poetry.py | python
-RUN chmod 755 /env/poetry/bin/poetry
-COPY pyproject-core.toml pyproject.toml 
-COPY poetry-core.lock poetry.lock
-RUN poetry install -vvv
+FROM npm-devel as  python-devel
+
+WORKDIR ${PYENV_ROOT}
+COPY requirements-core.txt requirements-core.txt
+RUN pip install -r requirements-core.txt
 RUN jupyter serverextension enable nbgitpuller --sys-prefix
 RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 
 FROM base as deploy
 
-COPY --from=python-core ${ENV_ROOT} ${ENV_ROOT}
+COPY --from=python-devel ${ENV_ROOT} ${ENV_ROOT}
 
 COPY pkglist-extra.txt pkglist-extra.txt
 RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-extra.txt && pacman -Scc --noconfirm 

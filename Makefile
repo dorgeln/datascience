@@ -11,7 +11,7 @@ POETRY_TAG := poetry-${POETRY_VERSION}
 ARCH_CORE := which sudo git git-lfs pyenv nodejs-lts-fermium  fontconfig ttf-liberation
 ARCH_DEVEL := base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg
 ARCH_EXTRA := neofetch
-PYTHON_CORE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller invoke jupyter-server-proxy cysgp4
+PYTHON_CORE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
 NPM_CORE := vega-lite vega-cli canvas configurable-http-proxy 
 LOCAL_DIR := $(shell pwd | grep -o "[^/]*\$$" )
 
@@ -36,11 +36,9 @@ pyenv:
 
 deps: 
 	[ -f ./package-core.json ] || npm install --package-lock-only ${NPM_CORE};cp package.json package-core.json;cp package-lock.json package-lock-core.json
-
-
-
 	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION_TAG}"/g' pyproject.toml; poetry config virtualenvs.path .env;poetry config cache-dir .cache;poetry config virtualenvs.in-project true 
-	[ -f ./pyproject-core.toml ] || poetry add --lock ${PYTHON_CORE} -v;cp pyproject.toml pyproject-core.toml;cp poetry.lock poetry-core.lock
+
+	[ -f ./requirements-core.txt || poetry add --lock ${PYTHON_CORE} -v;poetry export --without-hashes -f requirements.txt -o requirements-core.txt
 
 	[ -f  pkglist-core.txt ] || 
 	for pkg in ${ARCH_CORE}; do \
@@ -69,9 +67,9 @@ pull:
 
 build:
 	docker image build --target base --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} .
-	docker image build --target python-devel --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-devel-${VERSION_TAG} .
+	docker image build --target devel --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} .
 	docker image build --target npm-devel  --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:npm-devel-${VERSION_TAG} .
-	docker image build --target python-core --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-core-${VERSION_TAG} .
+	docker image build --target python-devel --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-devel-${VERSION_TAG} .
 	docker image build --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} .
 
 bash:
@@ -115,7 +113,7 @@ install:
 	poetry install -vvv
 
 clean:
-	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-devel.txt pkglist-extra.txt
+	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-devel.txt pkglist-extra.txt requirements-core.txt
 	
 
 clean-all: clean
