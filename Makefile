@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := /bin/bash
-VERSION_TAG := 0.0.12
+VERSION := 0.0.13
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
 PYTHON_VERSION := 3.8.8
@@ -9,12 +9,10 @@ PYTHON_TAG := python-${PYTHON_VERSION}
 
 BUILDDIR=$(shell pwd)/rootfs
 
-ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch
-ARCH_CORE := nodejs-lts-fermium  fontconfig ttf-liberation
-ARCH_DEVEL := base base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg 
-ARCH_EXTRA := neofetch
-PYTHON_CORE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
-NPM_CORE := vega-lite vega-cli canvas configurable-http-proxy 
+ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch nodejs-lts-fermium  fontconfig ttf-liberation
+ARCH_BUILDER := base base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg 
+PYTHON_BASE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
+NPM_BASE := vega-lite vega-cli canvas configurable-http-proxy 
 LOCAL_DIR := $(shell pwd | grep -o "[^/]*\$$" )
 
 export NPM_DIR=${PWD}/.npm
@@ -25,7 +23,7 @@ env:
 	env
 
 arch:
-	sudo pacman --noconfirm -S ${ARCH_CORE} ${ARCH_DEVEL} ${ARCH_EXTRA}
+	sudo pacman --noconfirm -S ${ARCH_CORE} ${ARCH_BUILDER} ${ARCH_EXTRA}
 
 pyenv:
 	pyenv install -s ${PYTHON_VERSION}
@@ -37,30 +35,20 @@ pyenv:
 	pip install jupyter-repo2docker
 
 deps: 
-	[ -f ./package-core.json ] || npm install --package-lock-only ${NPM_CORE};cp package.json package-core.json;cp package-lock.json package-lock-core.json
-	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION_TAG}"/g' pyproject.toml; poetry config virtualenvs.path .env;poetry config cache-dir .cache;poetry config virtualenvs.in-project true 
+	[ -f ./package-base.json ] || npm install --package-lock-only ${NPM_BASE};cp package.json package-base.json
+	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION}"/g' pyproject.toml; poetry config virtualenvs.path .env;poetry config cache-dir .cache;poetry config virtualenvs.in-project true 
 
-	[ -f ./requirements-core.txt || poetry add --lock ${PYTHON_CORE} -v;poetry export --without-hashes -f requirements.txt -o requirements-core.txt
+	[ -f ./requirements-base.txt || poetry add --lock ${PYTHON_BASE} -v;poetry export --without-hashes -f requirements.txt -o requirements-base.txt
 
-	[ -f  pkglist-core.txt ] || 
+	[ -f  pkglist-base.txt ] || 
 	for pkg in ${ARCH_CORE}; do \
-		echo $$pkg >> pkglist-core.txt; \
+		echo $$pkg >> pkglist-base.txt; \
 	done
 
-	[ -f  pkglist-devel.txt ] || 
-	for pkg in ${ARCH_DEVEL}; do \
-		echo $$pkg >> pkglist-devel.txt; \
+	[ -f  pkglist-builder.txt ] || 
+	for pkg in ${ARCH_BUILDER}; do \
+		echo $$pkg >> pkglist-builder.txt; \
 	done	
-
-	[ -f  pkglist-extra.txt ] ||
-	for pkg in ${ARCH_EXTRA}; do \
-		echo $$pkg >> pkglist-extra.txt; \
-	done
-
-	[ -f  pkglist-extra.txt ] ||
-	for pkg in ${ARCH_EXTRA}; do \
-		echo $$pkg >> pkglist-extra.txt; \
-	done
 
 
 build-arch: clean-rootfs
@@ -81,46 +69,34 @@ build-arch: clean-rootfs
 	cp /etc/pacman.d/mirrorlist $(BUILDDIR)/etc/pacman.d/mirrorlist 
 	ln -fs /usr/lib/os-release $(BUILDDIR)/etc/os-release
 
-#	fakechroot -- fakeroot -- pacman -Rdd -r $(BUILDDIR) \
-#		--noconfirm --dbpath $(BUILDDIR)/var/lib/pacman \
-#		--config $(BUILDDIR)/etc/pacman.conf \
-#		--noscriptlet \
-#		linux-api-headers iana-etc systemd-libs libcap libcap-ng libldap pcre
-
-
-	# remove passwordless login for root (see CVE-2019-5021 for reference)
 	sed -i -e 's/^root::/root:!:/' "$(BUILDDIR)/etc/shadow"
 	sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" "$(BUILDDIR)/etc/sudoers"
 
-	# fakeroot to map the gid/uid of the builder process to root
-	# fixes #22
-	fakeroot -- tar --numeric-owner --xattrs --acls --exclude-from=exclude -C $(BUILDDIR) -c . | docker import - ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG}
+	fakeroot -- tar --numeric-owner --xattrs --acls --exclude-from=exclude -C $(BUILDDIR) -c . | docker import - ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION}
 
 bash-arch:
-	docker run -it  ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG} bash
+	docker run -it  ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION} bash
 
 pull:
-	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} || true
-	docker pull ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG} || true
+	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION} || true
+	docker pull ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION} || true
 
 build:
-	docker image build --target base --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} .
-	docker image build --target devel --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} .
-	docker image build --target npm-devel  --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:npm-devel-${VERSION_TAG} .
-	docker image build --target python-devel --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-devel-${VERSION_TAG} .
-	docker image build --target deploy --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} .
+	docker image build --target base --build-arg VERSION=${VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg DOCKER_USER=${DOCKER_USER} --build-arg DOCKER_REPO=${DOCKER_REPO}  -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION} .
+	docker image build --target builder --build-arg VERSION=${VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg DOCKER_USER=${DOCKER_USER} --build-arg DOCKER_REPO=${DOCKER_REPO} -t ${DOCKER_USER}/${DOCKER_REPO}:builder-${VERSION} .
+	docker image build --target deploy --build-arg VERSION=${VERSION} --build-arg PYTHON_VERSION=${PYTHON_VERSION} --build-arg DOCKER_USER=${DOCKER_USER} --build-arg DOCKER_REPO=${DOCKER_REPO} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} .
 
 bash:
-	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} bash
+	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION} bash
 
 bash-base:
-	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} bash
+	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION} bash
 
-bash-devel:
-	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} bash
+bash-builder:
+	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION} bash
 
 run:
-	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
+	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION}
 
 
 lab:
@@ -137,12 +113,12 @@ tag:
 			*[a-zA-Z=]*) pkg='';version='' ;; \
     		*) ;; \
 		esac; \
-		[ ! $$pkg  = '' ] && docker tag ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} ${DOCKER_USER}/${DOCKER_REPO}:$$pkg-$$version ; \
+		[ ! $$pkg  = '' ] && docker tag ${DOCKER_USER}/${DOCKER_REPO}:${VERSION} ${DOCKER_USER}/${DOCKER_REPO}:$$pkg-$$version ; \
 	done < pyproject.toml
-	docker tag ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} ${DOCKER_USER}/${DOCKER_REPO}:latest
+	docker tag ${DOCKER_USER}/${DOCKER_REPO}:${VERSION} ${DOCKER_USER}/${DOCKER_REPO}:latest
 
 push: build
-	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}
+	docker image push ${DOCKER_USER}/${DOCKER_REPO}:${VERSION}
 
 
 push-all: clean-tags build tag
@@ -156,8 +132,8 @@ install:
 clean-rootfs:
 	-rm -rf $(BUILDDIR)
 
-clean: rootfs
-	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-devel.txt pkglist-extra.txt requirements-core.txt
+clean: clean-rootfs
+	-rm -f package.json package-base.json package-lock.json poetry.lock pyproject.toml requirements-base.txt
 	
 
 clean-all: clean

@@ -1,33 +1,31 @@
-ARG VERSION_TAG
+ARG VERSION
+ARG DOCKER_USER
+ARG DOCKER_REPO
 
-
-FROM dorgeln/datascience:arch-${VERSION_TAG} as base
+FROM ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION} as base
+ARG VERSION
+ARG PYTHON_VERSION
+ARG DOCKER_USER
+ARG DOCKER_REPO
 ARG NB_USER="jovyan"
 ARG NB_UID="1000"
 ARG NB_GID="100"
-ARG PYTHON_VERSION
 
-LABEL maintainer="Andreas Trawöger <atrawog@dorgeln.org>" org.dorgeln.version=base-${VERSION_TAG} 
+LABEL maintainer="Andreas Trawöger <atrawog@dorgeln.org>" org.dorgeln.version=${VERSION} 
 
-USER root
-RUN groupadd -g ${NB_GID} users
-RUN groupadd -g 998 wheel
-RUN useradd -m --uid ${NB_UID} -G wheel ${NB_USER}
-
+RUN groupadd -g ${NB_GID} users && groupadd -g 998 wheel && useradd -m --uid ${NB_UID} -G wheel ${NB_USER}
 RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
 RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
-
-# Update Packages, install package dependencies and clean pacman cache
-COPY pkglist-core.txt pkglist-core.txt
-RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-core.txt && pacman -Scc --noconfirm 
-RUN curl -qL https://www.npmjs.com/install.sh | sh
-
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 
-ENV ENV_ROOT="/env"
+ENV ENV_ROOT="/env" \
+    PYTHON_VERSION=${PYTHON_VERSION} \
+    DOCKER_USER=${DOCKER_USER} \
+    DOCKER_REPO=${DOCKER_REPO} \
+    VERSION=${VERSION}
 
 ENV PYENV_ROOT=${ENV_ROOT}/pyenv \
-    NPM_DIR=${ENV_ROOT}/npm 
+    NPM_DIR=${ENV_ROOT}/npm  
 
 ENV PYTHONUNBUFFERED=true \
     PYTHONDONTWRITEBYTECODE=true \
@@ -39,64 +37,53 @@ ENV PYTHONUNBUFFERED=true \
     LC_ALL=en_US.UTF-8 \
     LANG=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8 \
-    SHELL=/bin/bash
+    SHELL=/bin/bash \
+    NB_USER=${NB_USER} \
+    NB_UID=${NB_UID} \
+    NB_GID=${NB_GID} \
+    JUPYTER_ENABLE_LAB=yes \
+    PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
 
-ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
-
-RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR}
-RUN chown -R ${NB_USER}.${NB_GID} ${ENV_ROOT}
+RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR} && chown -R ${NB_USER}.${NB_GID} ${ENV_ROOT}
+RUN curl -qL https://www.npmjs.com/install.sh | sh
 
 USER ${NB_USER}
-
-RUN npm config --global set update-notifier false
-RUN npm config --global set prefix ${NPM_DIR}
+RUN npm config --global set update-notifier false &&  npm config --global set prefix ${NPM_DIR}
 
 ENV USER ${NB_USER}
 ENV HOME /home/${NB_USER}
 WORKDIR ${HOME}
 
-# Build devel image 
-FROM dorgeln/datascience:base-${VERSION_TAG} as devel
+COPY entrypoint /usr/local/bin/entrypoint
+ENTRYPOINT ["/usr/local/bin/entrypoint"]
+
+COPY start.sh start-notebook.sh start-singleuser.sh /usr/local/bin/
+CMD ["start-notebook.sh"]
+EXPOSE 8888
+
+FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION} as builder
 ARG PYTHON_VERSION
 
+COPY --chown=${NB_USER} pkglist-builder.txt pkglist-builder.txt
+RUN sudo pacman --noconfirm  -Syu && sudo pacman --noconfirm  -S - < pkglist-builder.txt && sudo pacman -Scc --noconfirm 
 
-COPY --chown=${NB_USER} pkglist-devel.txt pkglist-devel.txt
-RUN sudo pacman --noconfirm  -S - < pkglist-devel.txt && sudo pacman -Scc --noconfirm 
-
-# Install Python via Pyenv
 RUN echo ${PYTHON_VERSION} 
 WORKDIR ${PYENV_ROOT}
 RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
 RUN pip install -U setuptools -U wheel
 
-FROM dorgeln/datascience:devel-${VERSION_TAG} as npm-devel
-
 WORKDIR ${NPM_DIR}
-COPY --chown=${NB_USER} package-core.json  ${NPM_DIR}/package.json
-# COPY --chown=${NB_USER} package-lock-core.json  ${NPM_DIR}/package-lock.json
-
-RUN npm install --verbose -dd --prefix ${NPM_DIR}
-# RUN npm cache clean --force
-
-FROM dorgeln/datascience:npm-devel-${VERSION_TAG} as python-devel
+COPY --chown=${NB_USER} package-base.json  ${NPM_DIR}/package.json
+RUN npm install --verbose -dd --prefix ${NPM_DIR} && npm cache clean --force
 
 WORKDIR ${PYENV_ROOT}
-COPY --chown=${NB_USER} requirements-core.txt requirements-core.txt
-RUN pip install -vv -r requirements-core.txt
-RUN jupyter serverextension enable nbgitpuller --sys-prefix
-RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
+COPY --chown=${NB_USER} requirements-base.txt requirements-base.txt
+RUN pip install -vv -r requirements-base.txt
+RUN jupyter serverextension enable nbgitpuller --sys-prefix && jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y && npm cache clean --force
 
-FROM dorgeln/datascience:base-${VERSION_TAG} as deploy
+FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION}  as deploy
 
-COPY --chown=${NB_USER} --from=python-devel ${ENV_ROOT} ${ENV_ROOT}
-
-ENV XDG_CACHE_HOME="/home/${NB_USER}/.cache/"
+COPY --chown=${NB_USER} --from=builder ${ENV_ROOT} ${ENV_ROOT}
+ENV XDG_CACHE_HOME="${HOME}/.cache/"
 RUN MPLBACKEND=Agg python -c "import matplotlib.pyplot"
-
 RUN ln -s ${NODE_PATH}  ${HOME}/node_modules
-
-COPY entrypoint /usr/local/bin/entrypoint
-ENTRYPOINT ["/usr/local/bin/entrypoint"]
-CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
-EXPOSE 8888
-
