@@ -53,7 +53,7 @@ RUN npm config --global set prefix ${NPM_DIR}
 
 ENV USER ${NB_USER}
 ENV HOME /home/${NB_USER}
-WORKDIR ${NB_USER}
+WORKDIR ${HOME}
 
 # Build devel image 
 FROM dorgeln/datascience:base-${VERSION_TAG} as devel
@@ -67,8 +67,7 @@ RUN sudo pacman --noconfirm  -S - < pkglist-devel.txt && sudo pacman -Scc --noco
 RUN echo ${PYTHON_VERSION} 
 WORKDIR ${PYENV_ROOT}
 RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
-RUN pip install -U setuptools
-RUN pip install -U wheel
+RUN pip install -U setuptools -U wheel
 
 FROM dorgeln/datascience:devel-${VERSION_TAG} as npm-devel
 
@@ -76,14 +75,14 @@ WORKDIR ${NPM_DIR}
 COPY --chown=${NB_USER} package-core.json  ${NPM_DIR}/package.json
 # COPY --chown=${NB_USER} package-lock-core.json  ${NPM_DIR}/package-lock.json
 
-RUN npm install -dd --prefix ${NPM_DIR}
+RUN npm install --verbose -dd --prefix ${NPM_DIR}
 # RUN npm cache clean --force
 
 FROM dorgeln/datascience:npm-devel-${VERSION_TAG} as python-devel
 
 WORKDIR ${PYENV_ROOT}
 COPY --chown=${NB_USER} requirements-core.txt requirements-core.txt
-RUN pip install -r requirements-core.txt
+RUN pip install -vv -r requirements-core.txt
 RUN jupyter serverextension enable nbgitpuller --sys-prefix
 RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 

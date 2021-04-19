@@ -11,7 +11,7 @@ BUILDDIR=$(shell pwd)/rootfs
 
 ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch
 ARCH_CORE := nodejs-lts-fermium  fontconfig ttf-liberation
-ARCH_DEVEL := base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg
+ARCH_DEVEL := base base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg 
 ARCH_EXTRA := neofetch
 PYTHON_CORE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
 NPM_CORE := vega-lite vega-cli canvas configurable-http-proxy 
@@ -150,7 +150,7 @@ push-all: clean-tags build tag
 
 
 install: 
-	npm install --unsafe-perm
+	npm install --verbose --unsafe-perm
 	poetry install -vvv
 
 clean-rootfs:
