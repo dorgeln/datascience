@@ -6,9 +6,11 @@ DOCKER_REPO := datascience
 PYTHON_VERSION := 3.8.8
 PYTHON_REQUIRED := ">=3.8,<3.9"
 PYTHON_TAG := python-${PYTHON_VERSION}
-POETRY_TAG := poetry-${POETRY_VERSION}
 
-ARCH_CORE := which sudo git git-lfs pyenv nodejs-lts-fermium  fontconfig ttf-liberation
+BUILDDIR=$(shell pwd)/rootfs
+
+ARCH_BASE := filesystem glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch
+ARCH_CORE := nodejs-lts-fermium  fontconfig ttf-liberation
 ARCH_DEVEL := base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg
 ARCH_EXTRA := neofetch
 PYTHON_CORE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
@@ -61,16 +63,50 @@ deps:
 	done
 
 
+build-arch: clean-rootfs
+	mkdir -vp $(BUILDDIR)/var/lib/pacman/ $(OUTPUTDIR)
+	install -Dm644 /usr/share/devtools/pacman-extra.conf $(BUILDDIR)/etc/pacman.conf
+	cat pacman-conf.d-noextract.conf >> $(BUILDDIR)/etc/pacman.conf
+
+
+	fakechroot -- fakeroot -- pacman -Sy -r $(BUILDDIR) \
+		--noconfirm --dbpath $(BUILDDIR)/var/lib/pacman \
+		--config $(BUILDDIR)/etc/pacman.conf \
+		--noscriptlet \
+		${ARCH_BASE}
+
+	fakechroot -- fakeroot -- chroot $(BUILDDIR) update-ca-trust
+	fakechroot -- fakeroot -- chroot $(BUILDDIR) locale-gen
+	fakechroot -- fakeroot -- chroot $(BUILDDIR) sh -c 'pacman-key --init && pacman-key --populate archlinux && bash -c "rm -rf etc/pacman.d/gnupg/{openpgp-revocs.d/,private-keys-v1.d/,pubring.gpg~,gnupg.S.}*"'
+	cp /etc/pacman.d/mirrorlist $(BUILDDIR)/etc/pacman.d/mirrorlist 
+	ln -fs /usr/lib/os-release $(BUILDDIR)/etc/os-release
+
+#	fakechroot -- fakeroot -- pacman -Rdd -r $(BUILDDIR) \
+#		--noconfirm --dbpath $(BUILDDIR)/var/lib/pacman \
+#		--config $(BUILDDIR)/etc/pacman.conf \
+#		--noscriptlet \
+#		linux-api-headers iana-etc systemd-libs libcap libcap-ng libldap pcre
+
+
+	# remove passwordless login for root (see CVE-2019-5021 for reference)
+	sed -i -e 's/^root::/root:!:/' "$(BUILDDIR)/etc/shadow"
+
+	# fakeroot to map the gid/uid of the builder process to root
+	# fixes #22
+	fakeroot -- tar --numeric-owner --xattrs --acls --exclude-from=exclude -C $(BUILDDIR) -c . | docker import - ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG}
+
+
+
 pull:
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} || true
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest || true
 
 build:
-	docker image build --target base --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} .
-	docker image build --target devel --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} .
-	docker image build --target npm-devel  --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:npm-devel-${VERSION_TAG} .
-	docker image build --target python-devel --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-devel-${VERSION_TAG} .
-	docker image build --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} .
+	docker image build --target base --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} .
+	docker image build --target devel --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} .
+	docker image build --target npm-devel  --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:npm-devel-${VERSION_TAG} .
+	docker image build --target python-devel --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:python-devel-${VERSION_TAG} .
+	docker image build --target deploy --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} -t ${DOCKER_USER}/${DOCKER_REPO}:${PYTHON_TAG} .
 
 bash:
 	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} bash
@@ -112,7 +148,10 @@ install:
 	npm install --unsafe-perm
 	poetry install -vvv
 
-clean:
+clean-rootfs:
+	-rm -rf $(BUILDDIR)
+
+clean: rootfs
 	-rm -f pyproject.toml poetry.lock pyproject-core.toml package.json package-lock.json package-core.json poetry-core.lock package-lock-core.json pkglist-core.txt pkglist-devel.txt pkglist-extra.txt requirements-core.txt
 	
 

@@ -1,6 +1,7 @@
+ARG VERSION_TAG
 ARG PYTHON_VERSION
 
-FROM dorgeln/archlinux:latest as base
+FROM dorgeln/datascience:arch-${VERSION_TAG} as base
 ARG PYTHON_VERSION
 
 # Glibc fix if you want build images on Docker Hub
@@ -14,7 +15,7 @@ RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-core.txt && pa
 
 #  Allow sudo and su without password for user in group wheel
 RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
-RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
+#RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
 
 ENV ENV_ROOT="/env"
 
@@ -36,7 +37,7 @@ ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NP
 RUN curl -qL https://www.npmjs.com/install.sh | sh
 
 # Build devel image 
-FROM base as devel
+FROM dorgeln/datascience:base-${VERSION_TAG} as devel
 ARG PYTHON_VERSION
 
 COPY pkglist-devel.txt pkglist-devel.txt
@@ -49,7 +50,7 @@ RUN pyenv install -v ${PYTHON_VERSION} && pyenv global ${PYTHON_VERSION}
 RUN pip install -U setuptools
 RUN pip install -U wheel
 
-FROM devel as npm-devel
+FROM dorgeln/datascience:devel-${VERSION_TAG} as npm-devel
 
 WORKDIR ${NPM_DIR}
 COPY package-core.json  ${NPM_DIR}/package.json
@@ -59,7 +60,7 @@ RUN npm config --global set update-notifier false
 RUN npm config --global set prefix ${NPM_DIR}
 RUN npm cache clean --force
 
-FROM npm-devel as  python-devel
+FROM dorgeln/datascience:npm-devel-${VERSION_TAG} as python-devel
 
 WORKDIR ${PYENV_ROOT}
 COPY requirements-core.txt requirements-core.txt
@@ -67,12 +68,9 @@ RUN pip install -r requirements-core.txt
 RUN jupyter serverextension enable nbgitpuller --sys-prefix
 RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 
-FROM base as deploy
+FROM dorgeln/datascience:base-${VERSION_TAG} as deploy
 
 COPY --from=python-devel ${ENV_ROOT} ${ENV_ROOT}
-
-COPY pkglist-extra.txt pkglist-extra.txt
-RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-extra.txt && pacman -Scc --noconfirm 
 
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 ENV LC_ALL en_US.UTF-8
@@ -82,9 +80,9 @@ ENV SHELL /bin/bash
 
 ENV NB_USER=jovian 
 ENV NB_UID=1000
-ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
-RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
-
+# ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
+# RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
+RUN useradd -m --uid ${NB_UID} ${NB_USER}
 
 ENV USER ${NB_USER}
 ENV HOME /home/${USER}

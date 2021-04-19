@@ -1,8 +1,3 @@
-which
-sudo
-git
-git-lfs
-pyenv
 nodejs-lts-fermium
 fontconfig
 ttf-liberation
