@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "datascience"
-version = "0.0.13"
+version = "0.0.14"
 description = ""
 authors = ["Andreas Trawöger <atrawog@dorgeln.org>"]
 
@@ -15,6 +15,9 @@ altair-saver = "^0.5.0"
 nbgitpuller = "^0.9.0"
 jupyter-server-proxy = "^3.0.2"
 cysgp4 = "^0.3.3"
+bokeh = "^2.3.1"
+scipy = "^1.6.2"
+jupyter-bokeh = "^3.0.0"
 
 [tool.poetry.dev-dependencies]
 

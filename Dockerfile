@@ -57,8 +57,7 @@ WORKDIR ${HOME}
 COPY entrypoint /usr/local/bin/entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
 
-COPY start.sh start-notebook.sh start-singleuser.sh /usr/local/bin/
-CMD ["start-notebook.sh"]
+CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
 EXPOSE 8888
 
 FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION} as builder
@@ -79,7 +78,7 @@ RUN npm install --verbose -dd --prefix ${NPM_DIR} && npm cache clean --force
 WORKDIR ${PYENV_ROOT}
 COPY --chown=${NB_USER} requirements-base.txt requirements-base.txt
 RUN pip install -vv -r requirements-base.txt
-RUN jupyter serverextension enable nbgitpuller --sys-prefix && jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y && npm cache clean --force
+RUN jupyter serverextension enable nbgitpuller --sys-prefix && jupyter serverextension enable --sys-prefix jupyter_server_proxy && jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y && npm cache clean --force
 
 FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION}  as deploy
 
