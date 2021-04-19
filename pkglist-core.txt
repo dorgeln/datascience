@@ -1,0 +1,3 @@
+nodejs-lts-fermium
+fontconfig
+ttf-liberation

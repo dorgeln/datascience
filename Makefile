@@ -1,6 +1,6 @@
 .ONESHELL:
 SHELL := /bin/bash
-VERSION_TAG := 0.0.11
+VERSION_TAG := 0.0.12
 DOCKER_USER := dorgeln
 DOCKER_REPO := datascience
 PYTHON_VERSION := 3.8.8
@@ -9,7 +9,7 @@ PYTHON_TAG := python-${PYTHON_VERSION}
 
 BUILDDIR=$(shell pwd)/rootfs
 
-ARCH_BASE := filesystem glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch
+ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch
 ARCH_CORE := nodejs-lts-fermium  fontconfig ttf-liberation
 ARCH_DEVEL := base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg
 ARCH_EXTRA := neofetch
@@ -90,16 +90,18 @@ build-arch: clean-rootfs
 
 	# remove passwordless login for root (see CVE-2019-5021 for reference)
 	sed -i -e 's/^root::/root:!:/' "$(BUILDDIR)/etc/shadow"
+	sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" "$(BUILDDIR)/etc/sudoers"
 
 	# fakeroot to map the gid/uid of the builder process to root
 	# fixes #22
 	fakeroot -- tar --numeric-owner --xattrs --acls --exclude-from=exclude -C $(BUILDDIR) -c . | docker import - ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG}
 
-
+bash-arch:
+	docker run -it  ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG} bash
 
 pull:
 	docker pull ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} || true
-	docker pull ${DOCKER_USER}/${DOCKER_REPO}:latest || true
+	docker pull ${DOCKER_USER}/${DOCKER_REPO}:arch-${VERSION_TAG} || true
 
 build:
 	docker image build --target base --build-arg VERSION_TAG=${VERSION_TAG} --build-arg PYTHON_VERSION=${PYTHON_VERSION} -t ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} .
@@ -112,7 +114,10 @@ bash:
 	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG} bash
 
 bash-base:
-	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:base bash
+	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION_TAG} bash
+
+bash-devel:
+	docker run -it ${DOCKER_USER}/${DOCKER_REPO}:devel-${VERSION_TAG} bash
 
 run:
 	docker run ${DOCKER_USER}/${DOCKER_REPO}:${VERSION_TAG}

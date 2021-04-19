@@ -1,21 +1,28 @@
 ARG VERSION_TAG
-ARG PYTHON_VERSION
+
 
 FROM dorgeln/datascience:arch-${VERSION_TAG} as base
+ARG NB_USER="jovyan"
+ARG NB_UID="1000"
+ARG NB_GID="100"
 ARG PYTHON_VERSION
 
-# Glibc fix if you want build images on Docker Hub
-# RUN patched_glibc=glibc-linux4-2.33-4-x86_64.pkg.tar.zst && \
-#   curl -LO "https://repo.archlinuxcn.org/x86_64/$patched_glibc" && \
-#    bsdtar -C / -xvf "$patched_glibc"
+LABEL maintainer="Andreas Trawöger <atrawog@dorgeln.org>" org.dorgeln.version=base-${VERSION_TAG} 
+
+USER root
+RUN groupadd -g ${NB_GID} users
+RUN groupadd -g 998 wheel
+RUN useradd -m --uid ${NB_UID} -G wheel ${NB_USER}
+
+RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
+RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
 
 # Update Packages, install package dependencies and clean pacman cache
 COPY pkglist-core.txt pkglist-core.txt
 RUN pacman --noconfirm -Syu && pacman --noconfirm  -S - < pkglist-core.txt && pacman -Scc --noconfirm 
+RUN curl -qL https://www.npmjs.com/install.sh | sh
 
-#  Allow sudo and su without password for user in group wheel
-RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g" /etc/sudoers
-#RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
+RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 
 ENV ENV_ROOT="/env"
 
@@ -28,20 +35,33 @@ ENV PYTHONUNBUFFERED=true \
     PIP_DISABLE_PIP_VERSION_CHECK=true \
     PIP_DEFAULT_TIMEOUT=180 \
     NODE_PATH=${NPM_DIR}/node_modules \
-    NPM_CONFIG_GLOBALCONFIG=${NPM_DIR}/npmrc
-
-RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR} ${SRC_DIR}
+    NPM_CONFIG_GLOBALCONFIG=${NPM_DIR}/npmrc\
+    LC_ALL=en_US.UTF-8 \
+    LANG=en_US.UTF-8 \
+    LANGUAGE=en_US.UTF-8 \
+    SHELL=/bin/bash
 
 ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
 
-RUN curl -qL https://www.npmjs.com/install.sh | sh
+RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR}
+RUN chown -R ${NB_USER}.${NB_GID} ${ENV_ROOT}
+
+USER ${NB_USER}
+
+RUN npm config --global set update-notifier false
+RUN npm config --global set prefix ${NPM_DIR}
+
+ENV USER ${NB_USER}
+ENV HOME /home/${NB_USER}
+WORKDIR ${NB_USER}
 
 # Build devel image 
 FROM dorgeln/datascience:base-${VERSION_TAG} as devel
 ARG PYTHON_VERSION
 
-COPY pkglist-devel.txt pkglist-devel.txt
-RUN pacman --noconfirm  -S - < pkglist-devel.txt && pacman -Scc --noconfirm 
+
+COPY --chown=${NB_USER} pkglist-devel.txt pkglist-devel.txt
+RUN sudo pacman --noconfirm  -S - < pkglist-devel.txt && sudo pacman -Scc --noconfirm 
 
 # Install Python via Pyenv
 RUN echo ${PYTHON_VERSION} 
@@ -53,55 +73,31 @@ RUN pip install -U wheel
 FROM dorgeln/datascience:devel-${VERSION_TAG} as npm-devel
 
 WORKDIR ${NPM_DIR}
-COPY package-core.json  ${NPM_DIR}/package.json
-COPY package-lock-core.json  ${NPM_DIR}/package-lock.json
+COPY --chown=${NB_USER} package-core.json  ${NPM_DIR}/package.json
+# COPY --chown=${NB_USER} package-lock-core.json  ${NPM_DIR}/package-lock.json
+
 RUN npm install -dd --prefix ${NPM_DIR}
-RUN npm config --global set update-notifier false
-RUN npm config --global set prefix ${NPM_DIR}
-RUN npm cache clean --force
+# RUN npm cache clean --force
 
 FROM dorgeln/datascience:npm-devel-${VERSION_TAG} as python-devel
 
 WORKDIR ${PYENV_ROOT}
-COPY requirements-core.txt requirements-core.txt
+COPY --chown=${NB_USER} requirements-core.txt requirements-core.txt
 RUN pip install -r requirements-core.txt
 RUN jupyter serverextension enable nbgitpuller --sys-prefix
 RUN jupyter labextension install @jupyterlab/server-proxy && jupyter lab clean -y 
 
 FROM dorgeln/datascience:base-${VERSION_TAG} as deploy
 
-COPY --from=python-devel ${ENV_ROOT} ${ENV_ROOT}
-
-RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
-ENV LC_ALL en_US.UTF-8
-ENV LANG en_US.UTF-8
-ENV LANGUAGE en_US.UTF-8
-ENV SHELL /bin/bash
-
-ENV NB_USER=jovian 
-ENV NB_UID=1000
-# ENV NB_GROUPS="adm,kvm,wheel,network,uucp,users"
-# RUN useradd -m --uid ${NB_UID} -G ${NB_GROUPS} ${NB_USER}
-RUN useradd -m --uid ${NB_UID} ${NB_USER}
-
-ENV USER ${NB_USER}
-ENV HOME /home/${USER}
-
-ENV REPO_DIR=${HOME}
-WORKDIR ${REPO_DIR}
+COPY --chown=${NB_USER} --from=python-devel ${ENV_ROOT} ${ENV_ROOT}
 
 ENV XDG_CACHE_HOME="/home/${NB_USER}/.cache/"
 RUN MPLBACKEND=Agg python -c "import matplotlib.pyplot"
 
 RUN ln -s ${NODE_PATH}  ${HOME}/node_modules
 
-
 COPY entrypoint /usr/local/bin/entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
 CMD ["jupyter", "notebook", "--ip", "0.0.0.0"]
 EXPOSE 8888
 
-
-RUN chown -R $USER.$USER ${HOME} ${ENV_ROOT}
-USER ${USER}
-WORKDIR ${HOME}
