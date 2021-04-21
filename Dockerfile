@@ -18,14 +18,10 @@ RUN sed -i "s/^# %wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) NOPASSWD: ALL/g
 RUN sed -i "s/^#auth		sufficient	pam_wheel.so trust use_uid/auth		sufficient	pam_wheel.so trust use_uid/g" /etc/pam.d/su
 RUN echo "en_US.UTF-8 UTF-8" > /etc/locale.gen &&     locale-gen
 
-ENV ENV_ROOT="/env" \
-    PYTHON_VERSION=${PYTHON_VERSION} \
-    DOCKER_USER=${DOCKER_USER} \
-    DOCKER_REPO=${DOCKER_REPO} \
-    VERSION=${VERSION}
-
+ENV ENV_ROOT="/env" 
 ENV PYENV_ROOT=${ENV_ROOT}/pyenv \
-    NPM_DIR=${ENV_ROOT}/npm  
+    NPM_DIR=${ENV_ROOT}/npm 
+ENV PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/bin:${NPM_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 ENV PYTHONUNBUFFERED=true \
     PYTHONDONTWRITEBYTECODE=true \
@@ -42,7 +38,17 @@ ENV PYTHONUNBUFFERED=true \
     NB_UID=${NB_UID} \
     NB_GID=${NB_GID} \
     JUPYTER_ENABLE_LAB=yes \
-    PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
+    PYTHON_VERSION=${PYTHON_VERSION} \
+    DOCKER_USER=${DOCKER_USER} \
+    DOCKER_REPO=${DOCKER_REPO} \
+    VERSION=${VERSION} \
+    USER=${NB_USER} \
+    HOME=/home/${NB_USER} \
+    REPO_DIR=/home/${NB_USER} \
+    XDG_CACHE_HOME=/home/${NB_USER}/.cache \
+    MAKE_OPTS="-j8" \
+    CONFIGURE_OPTS="--enable-shared --enable-optimizations --with-computed-gotos" \
+    NPY_USE_BLAS_ILP64=1
 
 RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR} && chown -R ${NB_USER}.${NB_GID} ${ENV_ROOT}
 
@@ -53,6 +59,7 @@ RUN npm config --global set update-notifier false &&  npm config --global set pr
 ENV USER ${NB_USER}
 ENV HOME /home/${NB_USER}
 WORKDIR ${HOME}
+RUN ln -s ${NODE_PATH}  ${HOME}/node_modules
 
 COPY entrypoint /usr/local/bin/entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint"]
@@ -64,7 +71,7 @@ FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION} as builder
 ARG PYTHON_VERSION
 
 COPY --chown=${NB_USER} pkglist-builder.txt pkglist-builder.txt
-RUN sudo pacman --noconfirm  -Syu && sudo pacman --noconfirm  -S - < pkglist-builder.txt && sudo pacman -Scc --noconfirm 
+RUN sudo pacman --noconfirm  -Sy && sudo pacman --noconfirm  -S - < pkglist-builder.txt && sudo pacman -Scc --noconfirm 
 
 RUN echo ${PYTHON_VERSION} 
 WORKDIR ${PYENV_ROOT}
@@ -83,6 +90,5 @@ RUN jupyter serverextension enable nbgitpuller --sys-prefix && jupyter serverext
 FROM ${DOCKER_USER}/${DOCKER_REPO}:base-${VERSION}  as deploy
 
 COPY --chown=${NB_USER} --from=builder ${ENV_ROOT} ${ENV_ROOT}
-ENV XDG_CACHE_HOME="${HOME}/.cache/"
-RUN MPLBACKEND=Agg python -c "import matplotlib.pyplot"
-RUN ln -s ${NODE_PATH}  ${HOME}/node_modules
+
+

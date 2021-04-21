@@ -1,14 +1,12 @@
 [tool.poetry]
-name = "datascience"
-version = "0.0.14"
+name = "fastbook"
+version = "0.0.15"
 description = ""
 authors = ["Andreas Trawöger <atrawog@dorgeln.org>"]
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.9"
-fastbook = "^0.0.16"
 numpy = "^1.20.2"
-matplotlib = "^3.4.1"
 pandas = "^1.2.4"
 jupyterlab = "^3.0.14"
 altair = "^4.1.0"
@@ -16,6 +14,7 @@ altair-saver = "^0.5.0"
 nbgitpuller = "^0.9.0"
 jupyter-server-proxy = "^3.0.2"
 cysgp4 = "^0.3.3"
+vega-datasets = "^0.9.0"
 
 [tool.poetry.dev-dependencies]
 

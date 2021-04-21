@@ -1,8 +1,8 @@
 .ONESHELL:
 SHELL := /bin/bash
-VERSION := 0.0.14
+VERSION := 0.0.15
 DOCKER_USER := dorgeln
-DOCKER_REPO := datascience
+DOCKER_REPO := fastbook
 PYTHON_VERSION := 3.8.8
 PYTHON_REQUIRED := ">=3.8,<3.9"
 PYTHON_TAG := python-${PYTHON_VERSION}
@@ -11,7 +11,7 @@ BUILDDIR=$(shell pwd)/rootfs
 
 ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch nodejs-lts-fermium  fontconfig ttf-liberation
 ARCH_BUILDER := base base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg 
-PYTHON_BASE := fastbook numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
+PYTHON_BASE :=  numpy pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4 vega_datasets
 NPM_BASE := vega-lite vega-cli canvas configurable-http-proxy 
 LOCAL_DIR := $(shell pwd | grep -o "[^/]*\$$" )
 
@@ -31,14 +31,13 @@ pyenv:
 	pyenv global ${PYTHON_VERSION}
 	python --version
 	python -m pip install --upgrade pip
-	pip install poetry==${POETRY_VERSION}
-	pip install jupyter-repo2docker
+	pip install -U poetry
+	pip install -U jupyter-repo2docker
 
 deps: 
 	[ -f ./package-base.json ] || npm install --package-lock-only ${NPM_BASE};cp package.json package-base.json
 	[ -f ./pyproject.toml ] || poetry init -n --python ${PYTHON_REQUIRED}; sed -i 's/version = "0.1.0"/version = "${VERSION}"/g' pyproject.toml; poetry config virtualenvs.path .env;poetry config cache-dir .cache;poetry config virtualenvs.in-project true 
-
-	[ -f ./requirements-base.txt || poetry add --lock ${PYTHON_BASE} -v;poetry export --without-hashes -f requirements.txt -o requirements-base.txt
+	[ -f ./requirements-base.txt ]|| poetry add --lock ${PYTHON_BASE} -v;poetry export --without-hashes -f requirements.txt -o requirements-base.txt
 
 	[ -f  pkglist-base.txt ] || 
 	for pkg in ${ARCH_CORE}; do \
@@ -56,8 +55,7 @@ build-arch: clean-rootfs
 	install -Dm644 /usr/share/devtools/pacman-extra.conf $(BUILDDIR)/etc/pacman.conf
 	cat pacman-conf.d-noextract.conf >> $(BUILDDIR)/etc/pacman.conf
 
-
-	fakechroot -- fakeroot -- pacman -Sy -r $(BUILDDIR) \
+	fakechroot -- fakeroot -- pacman -Syu -r $(BUILDDIR) \
 		--noconfirm --dbpath $(BUILDDIR)/var/lib/pacman \
 		--config $(BUILDDIR)/etc/pacman.conf \
 		--noscriptlet \
