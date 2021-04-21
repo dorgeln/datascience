@@ -45,8 +45,8 @@ ENV PYTHONUNBUFFERED=true \
     PATH="${PYENV_ROOT}/shims:${PYENV_ROOT}/versions/${PYTHON_VERSION}/bin::${NPM_DIR}/bin:$PATH"
 
 RUN mkdir -p ${PYENV_ROOT} ${NPM_DIR} && chown -R ${NB_USER}.${NB_GID} ${ENV_ROOT}
-RUN curl -qL https://www.npmjs.com/install.sh | sh
 
+RUN curl -qL https://www.npmjs.com/install.sh | sh
 USER ${NB_USER}
 RUN npm config --global set update-notifier false &&  npm config --global set prefix ${NPM_DIR}
 

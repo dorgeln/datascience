@@ -11,7 +11,7 @@ BUILDDIR=$(shell pwd)/rootfs
 
 ARCH_BASE := filesystem util-linux procps-ng  findutils	 glibc bash pacman sed grep tar gzip xz which sudo git git-lfs pyenv neofetch nodejs-lts-fermium  fontconfig ttf-liberation
 ARCH_BUILDER := base base-devel freetype2 pango cairo giflib libjpeg-turbo openjpeg2 librsvg 
-PYTHON_BASE := numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4 bokeh scipy jupyter_bokeh
+PYTHON_BASE := fastbook numpy matplotlib pandas jupyterlab altair altair_saver nbgitpuller jupyter-server-proxy cysgp4
 NPM_BASE := vega-lite vega-cli canvas configurable-http-proxy 
 LOCAL_DIR := $(shell pwd | grep -o "[^/]*\$$" )
 
